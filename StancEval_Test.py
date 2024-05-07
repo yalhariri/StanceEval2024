@@ -1,14 +1,15 @@
-
 import sys
 
 
-if len(sys.argv) != 3:
-    print("Usage: python StancEval_Test.py qarib qarib/bert-base-qarib")
+if len(sys.argv) != 6:
+    print("Usage: python StancEval_Test.py qarib qarib/bert-base-qarib trainingDataSource testDataSource OutputFile")
     sys.exit(1)
 
-# Retrieve arguments
 model_n = sys.argv[1] 
 model_name = sys.argv[2]
+training_data = sys.argv[3]
+test_data = sys.argv[4]
+outputFile = sys.argv[5]
 
 import pandas as pd
 from transformers import AutoTokenizer
@@ -27,36 +28,25 @@ from sklearn.model_selection import train_test_split
 # Load data
 import sys
 def get_data():
-    data_training_df = pd.read_csv("Data/Mawqif_All_Train.csv")
-    data_val_df = pd.read_csv("Data/Mawqif_All_Val.csv")
+    data_training_df = pd.read_csv(training_data)
+    
     return {
         "train" : data_training_df.fillna("None"),
-        "val" : data_val_df.fillna("None"),
     }
         
 
-data_all_dict = get_data()
+data_dict = get_data()
 
-print(f"Size of trining Data: {len(data_all_dict['train'])}")
-print(f"Size of validation Data: {len(data_all_dict['val'])}")
-data_dict = data_all_dict.copy()
+print(f"Size of trining Data: {len(data_dict['train'])}")
 
 feature = 'stance'
 set(data_dict['train'][feature])
 
 mapping = {'None': 0, 'Favor': 1, 'Against': 2}
 class_names = ['None','Favor','Against']
-if feature == 'sentiment':
-    mapping = {'Negative': 0, 'Neutral': 1, 'Positive': 2}
-    class_names = ['Negative', 'Neutral', 'Positive']
-elif feature == 'sarcasm':
-    mapping = {'No': 0, 'Yes': 1}
-    class_names = ['No','Yes']
 
 
 data_dict['train'][feature] = data_dict['train'][feature].apply(lambda x: mapping[x])
-data_dict['val'][feature] = data_dict['val'][feature].apply(lambda x: mapping[x])
-#test_df['stance'] = test_df['stance'].apply(lambda x: mapping[x])
 
 LABEL_COLUMNS=[feature]
 
@@ -68,7 +58,7 @@ def preprocess_function(examples):
 id2label = {v: k for k, v in mapping.items()}
 
 
-test_data = pd.read_csv("./Data/Mawqif_AllTargets_Blind Test.csv")
+test_data = pd.read_csv(test_data)
 test_data = test_data.fillna("")
 test_data
 
@@ -109,9 +99,9 @@ for target in test_data.target.unique():
         df = pd.concat([df, pd.DataFrame.from_records([{"ID": qid, "Target": target , "Tweet": text, "Stance": predicted_main_class.upper()}])])
         output_.append(f"{qid}\t{target}\t{text}\t{predicted_main_class}")
     
-df.to_csv(f"report_testDataset_{model_n}.csv", index=False)
+df.to_csv(f"report_testDataset_{outputFile}.csv", index=False)
 
 
-with open("SMASH_STANCEEVAL_2024.csv", "w", encoding="utf-8") as fout:
+with open(f"{outputFile}.csv", "w", encoding="utf-8") as fout:
     for line in output_:
         fout.write(f"{line}\n")
