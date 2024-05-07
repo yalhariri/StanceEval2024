@@ -1,10 +1,13 @@
 # StanceEval2024
 
-To run the code, you need to install the required libraries. 
-Please notice that the safetensors of the trained models are removed for limitation in the space in GitHub. We are happy to provide them if required.
-Finally run the python code by calling the following command:
+The solution is based on Ollama and uses the model command-r:35b-v0.1-q8_0
+
+You need to the Blind test file inside the Data folder and named as ```Mawqif_AllTargets_Blind Test.csv```
+The output will be written to the CSV in the required format with the name output_testset_model.csv.
+
+
+to run the python script, which have the exact same content for the notebook, you can run it by the following command:
 
 ```
-python StancEval_Test.py qarib qarib/bert-base-qarib ./Data/Mawqif_All_Train.csv ./Data/Mawqif_AllTargets_Blind\ Test.csv SMASH_StanceEval
+python StancEval_Test.py ./Data/Mawqif_AllTargets_Blind\ Test.csv ./output_final_test.csv
 ```
-

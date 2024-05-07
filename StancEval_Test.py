@@ -1,105 +1,67 @@
 import sys
+import pandas as pd
 
-
-if len(sys.argv) != 6:
-    print("Usage: python StancEval_Test.py qarib qarib/bert-base-qarib trainingDataSource testDataSource OutputFile")
+if len(sys.argv) != 3:
+    print("Usage: python StancEval_Test.py testDataSource OutputFile")
     sys.exit(1)
 
-model_n = sys.argv[1] 
-model_name = sys.argv[2]
-training_data = sys.argv[3]
-test_data = sys.argv[4]
-outputFile = sys.argv[5]
-
-import pandas as pd
-from transformers import AutoTokenizer
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import numpy as np
-from transformers import AutoModelForSequenceClassification
-import evaluate
-accuracy = evaluate.load("accuracy")
-precision = evaluate.load("precision")
-recall = evaluate.load("recall")
-f1 = evaluate.load("f1")
-from sklearn.model_selection import train_test_split
-
-
-# Load data
-import sys
-def get_data():
-    data_training_df = pd.read_csv(training_data)
-    
-    return {
-        "train" : data_training_df.fillna("None"),
-    }
-        
-
-data_dict = get_data()
-
-print(f"Size of trining Data: {len(data_dict['train'])}")
-
-feature = 'stance'
-set(data_dict['train'][feature])
-
-mapping = {'None': 0, 'Favor': 1, 'Against': 2}
-class_names = ['None','Favor','Against']
-
-
-data_dict['train'][feature] = data_dict['train'][feature].apply(lambda x: mapping[x])
-
-LABEL_COLUMNS=[feature]
-
-
-def preprocess_function(examples):
-    return tokenizer(examples["text"], truncation=True)
-
-
-id2label = {v: k for k, v in mapping.items()}
-
+test_data = sys.argv[1]
+outputFile = sys.argv[2]
 
 test_data = pd.read_csv(test_data)
-test_data = test_data.fillna("")
+test_data = test_data.fillna("None")
 test_data
 
-df = pd.DataFrame()
+test_set_dict = {item['ID']: item for item in test_data.to_dict(orient="index").values()}
+
+mapper={'Women empowerment':'تمكين المرأة',
+'Covid Vaccine':'لقاح كوفيد',
+'Digital Transformation':'التحول الرقمي'}
+
+
+import ollama
+from tqdm import tqdm_notebook as tqdm
+
+
+model_name = "command-r:35b-v0.1-q8_0"
+system_context = "You are an expert in analysing people's opinions. You are an expert in Arabic. \
+# You will be given an Arabic sentence as input. Your task is to identify the stance towards the topic or subject discussed in the sentence. \
+# Your task is to identify whether the sentence is in favour of the topic, against it, or neutral. \
+Your output should be one of the following: favour, against, or neutral. You should not provide any further information. Your answer should be in English."
+question = "What is the stance in the given sentence? [favour, against, neutral]."
+
+counter = 0
+progress_bar = tqdm(test_set_dict.keys(), desc="Processing")
+for k in progress_bar:
+    text = test_set_dict[k]['text']
+    topic = test_set_dict[k]['target']
+    msg=f"الجملة: {text}\nالموضوع:{mapper[topic]}\n{question}"
+    
+    message=[{
+        'role': 'system',
+        'content':system_context},
+        {
+            'role':'user',
+            'content': msg
+        }]
+    response = ollama.chat(model=model_name, messages=message)
+    #print(response['message']['content'])
+    #print('-'*20)
+    test_set_dict[k]['label'] = response['message']['content']
+    progress_bar.update(1)
+progress_bar.close()
 
 
 
 output_ = ["ID\tTarget\tTweet\tStance"]
-for target in test_data.target.unique():
-    
-    print(f"model_name: {model_name}")
-    
-    print(f"Target: {target}\n")
-    model_path = f"./baseline_trainings/{model_n}_{target}_{feature}/model.path"  # Path where the model was saved
-    
-    print(f"model_path: {model_path}")
-    
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForSequenceClassification.from_pretrained(model_path)
-
-    print(model.config.id2label)
-
-    df = pd.DataFrame()
-    data_temp = test_data[test_data['target']==target]
-    for qid, text in zip(data_temp['ID'], data_temp['text']):
-        inputs = tokenizer(text, return_tensors="pt")
-        
-        with torch.no_grad():
-            logits = model(**inputs).logits
-        
-        
-        predicted_class_id = logits.argmax().item()
-
-        
-    
-        predicted_main_class = model.config.id2label[predicted_class_id]
-        
-        df = pd.concat([df, pd.DataFrame.from_records([{"ID": qid, "Target": target , "Tweet": text, "Stance": predicted_main_class.upper()}])])
-        output_.append(f"{qid}\t{target}\t{text}\t{predicted_main_class}")
-    
-df.to_csv(f"report_testDataset_{outputFile}.csv", index=False)
+for k in test_set_dict.keys():
+    if 'favour' in test_set_dict[k]['label'].lower():
+        label = "favor".upper()
+    elif 'against' in test_set_dict[k]['label'].lower():
+        label = "against".upper()
+    else:
+        label = "None".upper()
+    output_.append(f"{test_set_dict[k]['ID']}\t{test_set_dict[k]['target']}\t{test_set_dict[k]['text']}\t{label}")
 
 
 with open(f"{outputFile}.csv", "w", encoding="utf-8") as fout:
